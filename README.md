@@ -40,7 +40,7 @@ s = m.stem(tracks[50])
 m.play(s[:vocals])
 ## compute an ideal bitmask
 ibm = m.IBM(s)
-## play signal reconstructed using the amplitude from a channel, and phase from the mixed channel
+## play signal reconstructed using the amplitude and phase from the target channel
 m.play(ibm, :vocals, false) ## takes a while before vocals tune in...
 ## the same, but use mask found in computing `ibm`
 m.play(ibm, :vocals)

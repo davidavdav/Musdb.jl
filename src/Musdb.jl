@@ -23,7 +23,7 @@ function stems(o::PyCall.PyObject; slow=false)
     return d
 end
 
-Nfft = 882
+Nfft = 2048
 
 ## DSP gives us "stft" which does most of the heavy lifting for us, we dispatch by stereo signals
 ## We force a hamming window because that is invertable, well, i don't know, but really read
@@ -65,28 +65,34 @@ polar(x::Array) = (abs.(x), angle.(x))
 Base.complex(r::Array, θ::Array) = r .* exp.(im * θ)
 Base.complex(t::Tuple) = complex(t...)
 
-function IBM(stems::Dict, N=Nfft; thres=0.5, eps=1e-7)
-    A, ϕ = polar(stft(stems[:mixed], N))
+function IBM(stems::Dict, N=Nfft; thres=0.5, eps=1e-7, α=1)
+    smixed = stft(stems[:mixed], N)
+    Amixed = abs.(smixed)
     d = Dict{Symbol, Tuple}()
     for key in keys(stems)
-        Akey, ϕkey = polar(stft(stems[key], N))
-        d[key] = tuple((Akey ./ (eps .+ A)) .> thres, Akey, ϕkey)
+        if key == :mixed
+            skey, Akey = smixed, Amixed
+        else
+            skey = stft(stems[key], N)
+            Akey = abs.(skey)
+        end
+        d[key] = tuple((Akey.^α ./ (eps .+ Amixed.^α)) .> thres, skey)
     end
     return d
 end
 
-## This should dispatch on an object computer by `IBM`.  Plays using phase from mixed, and
+## This should dispatch on an object computer by `IBM`.  Plays using phase and
 ## amplitude from either
 ## - :mixed, using requested bitmask from `ibm`
-## - the requested key
+## - the requested key (to test the reconstruction performance)
 function play(ibm::Dict{Symbol, Tuple}, key::Symbol=:mixed, mask::Bool=true)
     key in keys(ibm) || error("Unknow track $key")
     if mask
-        A = ibm[key][1] .* ibm[:mixed][2]
+        s = ibm[key][1] .* ibm[:mixed][2]
     else
-        A = ibm[key][2]
+        s = ibm[key][2]
     end
-    play(istft(complex(A, ibm[:mixed][3])))
+    play(istft(s))
 end
 
 ## play audio
