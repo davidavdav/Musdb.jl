@@ -3,10 +3,12 @@ module Musdb
 import PyCall
 import PortAudio
 using DSP
+using ProgressMeter
 
 PyCall.@pyimport musdb
 
 DB(root_dir=get(ENV, "MUSDB_PATH")) = musdb.DB(root_dir=root_dir)
+load_mus_tracks(musdb) = musdb[:load_mus_tracks]()
 
 ## load stems from a track
 function stems(o::PyCall.PyObject; slow=false)
@@ -37,13 +39,15 @@ function DSP.stft(x::AbstractMatrix{T}, n=Nfft, noverlap=n ÷ 2) where T<:Abstra
 end
 
 """Inverse of `stft()`, the short term fourier transform"""
-function istft(s::AbstractMatrix{T}, n=Nfft, noverlap=n ÷ 2) where T
+function istft(s::AbstractMatrix{T}, n=Nfft, noverlap=n ÷ 2, hack=false) where T
     x = real(ifft(s, 1))
     nf = size(x, 2)
-    ## quick hack for perfect reconstruction is noverlap = n/2
-    x[1:n, :] ./= 2hamming(n)
-    x[1:(n-noverlap), 1] *= 2
-    x[(n-noverlap+1):n, end] *= 2
+    if hack
+        ## quick hack for perfect reconstruction is noverlap = n/2
+        x[1:n, :] ./= 2hamming(n)
+        x[1:(n-noverlap), 1] *= 2
+        x[(n-noverlap+1):n, end] *= 2
+    end
     nout = length(x) - noverlap * (nf-1)
     y = zeros(real(T), nout)
     for j in 1:nf, i in 1:n
@@ -65,11 +69,12 @@ polar(x::Array) = (abs.(x), angle.(x))
 Base.complex(r::Array, θ::Array) = r .* exp.(im * θ)
 Base.complex(t::Tuple) = complex(t...)
 
+## Ideal Bitmask
 function IBM(stems::Dict, N=Nfft; thres=0.5, eps=1e-7, α=1)
     smixed = stft(stems[:mixed], N)
     Amixed = abs.(smixed)
     d = Dict{Symbol, Tuple}()
-    for key in keys(stems)
+    @showprogress for key in keys(stems)
         if key == :mixed
             skey, Akey = smixed, Amixed
         else
@@ -78,6 +83,20 @@ function IBM(stems::Dict, N=Nfft; thres=0.5, eps=1e-7, α=1)
         end
         d[key] = tuple((Akey.^α ./ (eps .+ Amixed.^α)) .> thres, skey)
     end
+    return d
+end
+
+## Ideal Ratio Mask
+function IRM(stems::Dict, N=Nfft, eps=1e-7, α=2)
+    sources = setdiff(keys(stems), [:mixed])
+    s = Dict(k => stft(stems[k]) for k in sources)
+    ps = Dict(k => abs.(s[k]).^α for k in sources)
+    p = sum(values(ps)) .+ eps
+    d = Dict{Symbol, Tuple}()
+    for key in sources
+        d[key] = tuple(ps[key] ./ p, s[key])
+    end
+    d[:mixed] = tuple(ones(size(p)), sum(values(s)))
     return d
 end
 
@@ -96,6 +115,8 @@ function play(ibm::Dict{Symbol, Tuple}, key::Symbol=:mixed, mask::Bool=true)
 end
 
 ## play audio
+dev = nothing
+
 function setdefaultplaybackdevice()
     dev = nothing
     for d in PortAudio.devices()
@@ -118,13 +139,12 @@ function setoutputdev(name::AbstractString="Display Audio")
 end
 
 function play(x::AbstractArray{T}, srate=44100.0) where T <: AbstractFloat
-    dev == nothing && "No output audio devices found"
     nchan = ndims(x) == 1 ? 1 : size(x, 2)
-    if nchan > dev.maxoutchans
+    if dev != nothing && nchan > dev.maxoutchans
         x = mean(x, 2)
         nchan = 1
     end
-    stream = PortAudio.PortAudioStream(dev, 0, nchan, samplerate=srate)
+    stream = dev == nothing ? PortAudio.PortAudioStream(0, nchan, samplerate=srate) : PortAudio.PortAudioStream(dev, 0, nchan, samplerate=srate)
     write(stream, convert(Array{Float32}, x))
     close(stream)
 end

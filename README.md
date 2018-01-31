@@ -29,23 +29,26 @@ Pkg.clone("https://github.com/davidavdav/Musdb.jl")
 ```julia
 ## load the module, and name it `m` for short
 m = include("src/Musdb.jl")
-m.setdefaultplaybackdevice()
-## load the musdn18 dataset
+# m.setdefaultplaybackdevice()
+## load the musdb18 dataset
 mus = m.DB("/path/to/audio/data")
 ## load tracks via PyCall
-tracks = mus[:load_mus_tracks]()
+tracks = m.load_mus_tracks(mus)
 ## load a particular track as a `stems` structure
-s = m.stem(tracks[50])
+s = m.stems(tracks[50])
 ## play a particular channel
-m.play(s[:vocals])
+m.play(s[:vocals]) ## it takes a while before vocals tune in...
 ## compute an ideal bitmask
 ibm = m.IBM(s)
-## play signal reconstructed using the amplitude and phase from the target channel
-m.play(ibm, :vocals, false) ## takes a while before vocals tune in...
-## the same, but use mask found in computing `ibm`
+## play signal reconstructed using the amplitude and phase from the target channel, this should be perfect
+m.play(ibm, :vocals, false)
+## the same, but use mask found in computing `ibm`, and the signal from :mixed
 m.play(ibm, :vocals)
+## compute Ideal Ratio Mask
+irm = m.IRM(m.stems(tracks[1]))
+m.play(irm, :vocals)
 ```
 
 ## Results so far
 
-I can't get the extracted channels from the mix sound so well as in the demo.  It is quite rough on the edges.  I've tried a median filter over the bitmask in time, but that dodn't seem to help.
+It seems we can reconstruct the audio signal fairly well from the `stft` with `istft`, and the IBM and  IRM masks work OK, although reconstruction show some artifacts here and there.
