@@ -28,7 +28,9 @@ Pkg.clone("https://github.com/davidavdav/Musdb.jl")
 
 ```julia
 ## load the module, and name it `m` for short
-m = include("src/Musdb.jl")
+# m = include("src/Musdb.jl")
+import Musdb
+m = Musdb 
 # m.setdefaultplaybackdevice()
 ## load the musdb18 dataset
 mus = m.DB("/path/to/audio/data")
@@ -51,4 +53,4 @@ m.play(irm, :vocals)
 
 ## Results so far
 
-It seems we can reconstruct the audio signal fairly well from the `stft` with `istft`, and the IBM and  IRM masks work OK, although reconstruction show some artifacts here and there.
+It seems we can reconstruct the audio signal fairly well from the `stft` with `istft`, and the IBM and  IRM masks work OK, although reconstruction shows some artifacts here and there.

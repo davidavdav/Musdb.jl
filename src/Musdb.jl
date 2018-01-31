@@ -39,7 +39,7 @@ function DSP.stft(x::AbstractMatrix{T}, n=Nfft, noverlap=n ÷ 2) where T<:Abstra
 end
 
 """Inverse of `stft()`, the short term fourier transform"""
-function istft(s::AbstractMatrix{T}, n=Nfft, noverlap=n ÷ 2, hack=false) where T
+function istft(s::AbstractMatrix{T}, n=size(s, 1), noverlap=n ÷ 2, hack=false) where T
     x = real(ifft(s, 1))
     nf = size(x, 2)
     if hack
